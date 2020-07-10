@@ -4,7 +4,7 @@
 % Version 0.1, released at July 6 2020.
 % The Synthetic INS simulation provide the exact navigation solution based
 % on the strapdown approch, with perfect IMU (no error for gyro and
-% accelerometes). 
+% accelerometes).
 
 % This code is dived into two main parts:
 % 1) creating trajectory and solve the navigation equation.
@@ -20,16 +20,16 @@ set(0,'DefaultFigureWindowStyle','docked')
 set(0,'defaulttextInterpreter','latex')
 
 plotall=1;
-scenario=2;
-export_ref=1;
-
-D2R = pi/180;     % deg. to rad.
+scenario=1;
+export_ref=0;
+noise=0;
+D2R = pi/180;     % deg.  to rad.
 R2D = 180/pi;     % rad. to deg.
 
 % Create time frame
 dt    = 0.01; % sec.                        % IMU sampling interval
 time  = 240;                                % simulation time.
-ref.t = (0.01:dt:time)';                    % IMU time vector
+ref.t = (0.01:dt:time)';                       % IMU time vector
 
 %% Initialization
 % ref.mat contains the reference data structure from which inertial
@@ -71,8 +71,9 @@ DCMbn = DCMnb';
 qua   = euler2qua([roll_e(1) pitch_e(1) yaw_e(1)]);
 DCMnb_store(1,:)=[1 0 0 0 1 0 0 0 1];
 % Initialize velocity vector at INS (N.E.D)
-vel_e(1,:) = [6 0 0];
-wb_store(1,:) =[0 0 0];
+vel_e(1,:) = [5 0 0];
+wb =[0 0 0];
+wb_store(1,:) =wb;
 fb_store(1,:)=[0 0 9.8];
 v_total(1)=norm([vel_e],2);
 
@@ -80,26 +81,28 @@ v_total(1)=norm([vel_e],2);
 h_e(1)   = -5; %m
 lat_e(1) = pi/3; %rad
 lon_e(1) = pi/3; %rad
-Omega=2.5;
 t=0.01;
 t_store(1)=0;
 
-for i=2:L
 
+for i=2:L
+    
     if scenario == 1  % circular diving
-        vel_e(i-1,:) = 6*[sin(Omega*dt*t*pi) cos(Omega*dt*t*pi) 0.02]';
-    end
-    if scenario == 2 % 8-figure diving
-        vel_e(i-1,2)=6*cos(Omega*dt*t*pi);
         
+        fb_new(i,:)=[0 0 0]';
+        wb(i,:) =[0 0 0];
         
-        if t<time/2
-            vel_e(i-1,1)=6*sin(Omega*dt*t*pi);
+        if t>50 && t< 60
+            fb_new(i,:) = [-0.5 0.5 0]';
             
         end
         
-        if t>time/2
-            vel_e(i-1,1)=-6*sin(Omega*dt*t*pi);
+        if t>110 && t< 120
+            fb_new(i,:) = [ -0.5 -0.5 0]';
+        end
+        
+        if t>170 && t< 180
+            fb_new(i,:) = [ 0.5 -0.5 0]';
         end
         
     end
@@ -110,11 +113,10 @@ for i=2:L
     
     % In order to obtain perfect IMU readings, the angular velocity is
     % exactly as shuld be measured in body frame.
-    wb = DCMbn' * (omega_ie_n + omega_en_n);
-    wb_store(i,:) = wb;
+    wb_store(i,:) = wb(i,:);
     
     % Attitude update
-    [qua_n, DCMbn, euler] = att_update(wb, DCMbn, qua, ...
+    [qua_n, DCMbn, euler] = att_update(wb(i,:), DCMbn, qua, ...
         omega_ie_n, omega_en_n, dt, 'dcm');
     roll_e(i) = euler(1);
     pitch_e(i)= euler(2);
@@ -126,10 +128,11 @@ for i=2:L
     
     % Gravity update
     gn = gravity(lat_e(i-1), h_e(i-1));
-    fb = DCMnb * gn';
-    fb_store(i,:) = fb';
+    fb_clean = DCMnb * gn';
     % In order to obtain perfect IMU readings, the gravity vector is
     % substituted in place of fb.
+    fb=fb_new(i,:)'+fb_clean +0*0.1*randn(3,1);
+    fb_store(i,:) = fb';
     fn = (DCMbn * fb);
     
     % Velocity update
@@ -160,12 +163,12 @@ ref.roll  = roll_e;
 ref.pitch = pitch_e;
 ref.yaw   = yaw_e;
 ref.DCMnb = DCMnbstore;
-ref.fb_syn    = fb_store;
-ref.wb_syn    = wb_store;
+ref.fb    = fb_store;
+ref.wb    = wb_store;
 ref.freq=100;
-
+ref.t = t_store;
 if export_ref==1
-    save ref.mat;
+    save ref_clean.mat;
 end
 %% Plot
 if plotall==1
@@ -175,7 +178,7 @@ if plotall==1
     figure
     set(gca,'Fontsize',12);
     plot3(lat_e,lon_e,h_e)
-    zlim([-6,-4])
+    zlim([-20,-2])
     grid minor
     xlabel('Longtitude $\lambda$[deg]')
     ylabel('Latitude $\phi$ [deg]')
@@ -199,7 +202,7 @@ if plotall==1
     xlabel('Time [s]')
     ylabel('h [m]')
     grid minor
-        
+    
     figure
     subplot(2,1,1)
     plot(t_store,v_store (:,1),t_store,v_store (:,2),t_store,v_store (:,3))
@@ -212,7 +215,7 @@ if plotall==1
     subplot(2,1,2)
     plot(t_store,v_total)
     xlim([0,time])
-    ylim([5.8,6.2])
+    ylim([3,6])
     xlabel('Time [s]')
     grid minor
     title('Speed ($\left\| {{v_j}} \right\|_2^2)$')

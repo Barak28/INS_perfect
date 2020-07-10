@@ -22,7 +22,7 @@ if nargin < 7, att_mode  = 'quaternion'; end
 
 %% Correct gyros output for Earth rate and Transport rate
 
-wb_n = ( wb - DCMbn' * (omega_ie_N + omega_en_N));
+wb_n = ( wb' - DCMbn' * (omega_ie_N + omega_en_N));
 
 if strcmp(att_mode, 'quaternion')
 %% Quaternion update   
